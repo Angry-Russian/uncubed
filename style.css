@@ -1,3 +1,8 @@
-html, body, canvas#main{
+html, body, #main{
     width: 100%; height: 100%; margin: 0; padding: 0; border: 0;
+    background: #222;
+}
+
+#title{
+    position: absolute; top: 0; right: 0; font-family: sans-serif; color: #eee;
 }
