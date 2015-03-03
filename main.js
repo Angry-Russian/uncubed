@@ -9,9 +9,11 @@ var Animator = function(){
         
         drw = drawables || [];
         
+        var that = this;
         $(window).on('resize', function(){
             cnv.width = $(cnv).width();
             cnv.height = $(cnv).height();
+            that.draw();
         }).trigger('resize');
     }
     
@@ -21,7 +23,7 @@ var Animator = function(){
             var subj = drw[i];
             subj.draw.bind(subj)(this.context);
         }
-        window.requestAnimationFrame(this.draw.bind(this));
+        //window.requestAnimationFrame(this.draw.bind(this));
     }
     
     Animator.prototype.update = function Update(){
@@ -37,25 +39,34 @@ var Animator = function(){
 var Face = function(){
     
     function Face(opts){
-        this.color = opts.color || "0xFFFFFF";
+        this.color = opts.color || "#FFFFFF";
         this.components = [];
         this.refs = [];
+        if(opts.sides) this.refs.length = opts.sides;
+        console.log('creating face with', opts.sides, 'sides');
+        
         this.x = opts.x || 0;
         this.y = opts.y || 0;
         this.width = opts.width || 32;
         this.height = opts.height || 32;
+        this.rotation = opts.rotation || 0;
     }
     
     Face.prototype.draw = function Draw(c){
+        c.save();
+        c.translate(this.x+this.width/2, this.y+this.height/2);
+        c.rotate(this.rotation);
+        c.translate(-this.width/2, -this.height/2);
+        
         c.fillStyle = this.color;
-        c.fillRect(this.x, this.y, this.width, this.height);
+        c.fillRect(0, 0, this.width, this.height);
+        
         if(this.components){
-            c.translate(this.x, this.y);
             for(var i = 0, l = this.components.length; i<l; i++){
                 this.components[i].draw.bind(this.components[i])(c);
             }
-            c.translate(-this.x, -this.y);
         }
+        c.restore();
     }
     
     Face.prototype.update = function Update(){
@@ -63,7 +74,9 @@ var Face = function(){
     }
     
     Face.prototype.get = function Get(i){
-        return this.refs[i];
+        var len = this.refs.length;
+        while(i<0 && len > 0){i+=len;}
+        return this.refs[i%len];
     }
     
     Face.prototype.getFace = function GetFace(){
@@ -76,77 +89,185 @@ var Face = function(){
     }
     
     Face.prototype.set = function Set(i, face){
+        var len = this.refs.length;
+        while(i<0 && len > 0){i+=len;}
         this.refs[i] = face;
+        return this;
     }
     
     return Face;
 }();
 
 var Adapter = function(){
-    var target = null,
-        directionOffset = 0;
+    
     function Adapter(offset, obj){
         if(!obj) throw "object cannot be undefined";
-        target = obj;
-        directionOffset = offset;
+        this.target = obj;
+        this.directionOffset = offset;
         this.face = obj;
     }
     
     Adapter.prototype.draw = function Draw(c){
-        target.draw.bind(target)(c);
+        this.target.draw.bind(this.target)(c);
     }
     
     Adapter.prototype.update = function Update(){
-        target.update.bind(target)();
+        this.target.update.bind(this.target)();
     }
     
     Adapter.prototype.get = function Get(i){
-        return target.get(i+directionOffset);
+        return this.target.get(i+this.directionOffset);
     }
     
     Adapter.prototype.getFace = function GetFace(){
-        return target;
+        return this.target;
     }
     
-    Adapter.prototype.getDirectionOffset = function GetDirectionOffset(){
-        return directionOffset
+    Adapter.prototype.getDirectionOffset = function GetDirectionOffset(i){
+        return (i+this.directionOffset)%this.face.refs.length;
     }
     
     Adapter.prototype.set = function Set(i, face){
-        target.set(i+directionOffset, face);
+        return this.target.set(i+this.directionOffset, face);
     }
     
     return Adapter;
 }();
 
+function debugFace(face){
+    face.components.push({
+        ref:  face.getFace(),
+        draw: function(c){
+            c.rotate(-this.ref.rotation);
+            for(var ii = 0, ll = this.ref.getRefs().length, col=['#fff', '#0f0', '#f0f', '#000']; ii<ll; ii++){
+                var next = this.ref.get(ii).getFace();
+                if(next){
+                    c.translate(-face.x, -face.y);
+                    c.beginPath();
+                    c.moveTo(this.ref.x, this.ref.y);
+                    c.lineTo(next.x, next.y);
+                    c.strokeStyle = col[ii];
+                    c.stroke();
+                    c.translate(face.x, face.y);
+                }else{
+                    console.log('wtf', next);
+                }
+            }
+            c.rotate(this.ref.rotation);
+        }
+    });//*/
+}
+
+function debugLoop(dir, face){
+    var startFace = face;
+    
+    var iteration = 0;
+    var maxIterations = 4;
+    var cumulativeOffset = 0;
+    do{
+        
+        startFace.getFace().components.push({
+            face: face.getFace(),
+            draw:function(canvas){
+                canvas.rotate(-this.face.rotation);
+                canvas.translate(-startFace.x, -startFace.y);
+                canvas.beginPath();
+                canvas.moveTo(this.face.x, this.face.y);
+                canvas.lineTo(this.face.x + 32, this.face.y +32);
+                canvas.moveTo(this.face.x + 32, this.face.y);
+                canvas.lineTo(this.face.x, this.face.y +32);
+                canvas.strokeStyle = "white";
+                canvas.stroke();
+                canvas.translate(startFace.x, startFace.y)
+            }
+        })
+        
+        var adapter = face.get(dir+cumulativeOffset);
+        face = adapter.getFace();
+        if(adapter.getDirectionOffset) cumulativeOffset += adapter.getDirectionOffset(0);
+        
+    }while(face != startFace && ++iteration < maxIterations);
+    
+}
+
 $(function($){
-    var top = new Face({color: "#f00", x:0, y: 32*0, width: 31, height: 31}),
-        bot = new Face({color: "#00f", x:64, y: 32*3, width: 31, height: 31}),
+    
+    var top = new Face({color: "#f00", x:0, y: 64, width: 31, height: 31, sides:4}),
+        bot = new Face({color: "#00f", x:0, y: 128, width: 31, height: 31, sides:4}),
         faces = [],
-        colors = ['#0f0', '#ff0', '#0ff', '#f0f'];
+        colors = ['rgba(255, 255, 0, 0.5)', 'rgba(0, 255, 0, 0.5)', 'rgba(0, 255, 255, 0.5)', 'rgba(255, 0, 255, 0.5)'];
         
     faces.push(top);
     for(var i = 0; i<4; i++){
-        // create faces
-        var face = new Face({color: colors[i], x:32, y:32*i, width: 31, height: 31});
+        // create intermediary faces
+        var face = new Face({color: colors[i], x:32, y:32*i, width: 31, height: 31, sides:4});
         faces.push(face);
-        top.set(i, new Adapter(i, face));
-        bot.set(3-i, new Adapter(3-i, face));
-        face.set(3-i, new Adapter(i, top));
-        face.set(i, new Adapter(3-i, bot));
-        face = null;
+        
+        // connect to top and bottom
+        top.set(i, new Adapter(-i, face));
+        bot.set((4-i)%4, new Adapter(-(2-i)%4, face));
+        
+        face.set(2, new Adapter(i, top));
+        face.set(0, new Adapter(2-i, bot));
+        
+        // connect to up and down if they exist
+        if(i>0){
+            face.set(3, new Adapter(0, faces[i]));
+            faces[i].set(1, new Adapter(0, face));
+        }
+        if(i===3){
+            face.set(1, new Adapter(0, faces[1]));
+            faces[1].set(3, new Adapter(0, face));
+        }
     }
-    
     faces.push(bot);
     
+    // add 9 "tiles" into each face, which are also faces
     for(var j = 0, l = faces.length; j<l; j++ ){
-        // for each face, create tiles
+        var f = faces[j];
         for(var k = 0; k<9; k++){
             var x = (k % 3)*10 +1;
             var y = Math.floor(k / 3)*10+1;
-            faces[j].components.push(new Face({color:'rgba(0, 0, 0, 0.1)', x:x, y:y, width: 9, height: 9}));
+            f.components.push(new Face({color: f.color, x:x, y:y, width: 9, height: 9, sides:4}));
+        }
+        f.color = 'rgba(0, 0, 0, 0.3)';
+    }
+    
+    var centerX = $('body').width()/2;
+    var centerY = $('body').height()/2;
+    
+    for(var ri = 0, rr = [32, 64], rl = 2; ri<rl; ri++){
+        
+        var radius = rr[ri];
+        var radialOffset = -Math.PI/2;
+        
+        for(var ci = 0; ci<3; ci++){
+            
+            var face = faces[ri*3+ci];
+            var r = Math.PI*2/3 * ci + radialOffset - Math.PI/3*ri;
+            
+            face.x = centerX + Math.cos(r) * rr[ri];
+            face.y = centerY + Math.sin(r) * rr[ri];
+            face.rotation = r + Math.PI/4;
+            if(!ri){
+                face.getFace().components.push({
+                    draw:function(c){
+                        c.strokeStyle = "rgba(255, 255, 255, 0.3)";
+                        c.beginPath();
+                        c.arc(15, 15, 56, 0, Math.PI * 2, false);
+                        c.stroke();
+                        c.beginPath();
+                        c.arc(15, 15, 4, 0, Math.PI * 2, false);
+                        c.stroke();
+                    }
+                });
+            }
         }
     }
+    
+    // debug lines
+    // debugFace(faces[2]);
+    // debugLoop(4, faces[2]);
     
     var anim = new Animator($('#main').get(0), faces);
     anim.draw();
