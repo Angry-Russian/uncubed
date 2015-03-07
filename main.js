@@ -1,13 +1,16 @@
 "use strict";
 
 var Animator = function(){
-	var drw;
 	
 	function Animator(cnv, drawables){
 		this.canvas = cnv;
 		this.context = cnv.getContext('2d');
+		this.drawables = drawables || [];
 		
-		drw = drawables || [];
+		this.events = {
+			mousemove:[],
+			click:[]
+		}
 		
 		var that = this;
 		$(window).on('resize', function(){
@@ -19,17 +22,43 @@ var Animator = function(){
 	
 	Animator.prototype.draw = function Draw(){
 		this.canvas.width = this.canvas.width;
-		for(var i = 0, l = drw.length; i<l; i++){
-			var subj = drw[i];
+		for(var i = 0, l = this.drawables.length; i<l; i++){
+			var subj = this.drawables[i];
 			subj.draw.bind(subj)(this.context);
 		}
-		//window.requestAnimationFrame(this.draw.bind(this));
+		window.requestAnimationFrame(this.draw.bind(this));
+	}
+	
+	Animator.prototype.start = function Start(){
+		this.draw();
 	}
 	
 	Animator.prototype.update = function Update(){
-		for(var i = 0, l = drw.length; i<l; i++){
-			var subj = drw[i];
+		for(var i = 0, l = this.drawables.length; i<l; i++){
+			var subj = this.drawables[i];
 			subj.update.bind(subj)();
+		}
+	}
+	
+	Animator.prototype.bindInteractions = function(){
+		var that = this;
+		$(this.canvas).on('mousemove click', function(e){
+			var eventData = {
+				target:that.canvas,
+				mouseX: e.pageX,
+				mouseY: e.pageY
+			};
+			
+			that.events['mousemove'].forEach(function(i, v){
+				if(v && typeof v == 'function')
+					v(eventData);
+			})
+		});
+	}
+	
+	Animator.prototype.on = function(e, callback){
+		if(this.events[e]!== undefined){
+			this.events[e].push(callback);
 		}
 	}
 	
@@ -41,10 +70,10 @@ var Face = function(){
 	function Face(opts){
 		this.color = opts.color || "#FFFFFF";
 		this.originalColor = this.color;
-		this.components = [];
+		this.components = opts.components || [];
 		this.refs = [];
+		
 		if(opts.sides) this.refs.length = opts.sides;
-		console.log('creating face with', opts.sides, 'sides');
 		
 		this.x = opts.x || 0;
 		this.y = opts.y || 0;
@@ -75,9 +104,10 @@ var Face = function(){
 	}
 	
 	Face.prototype.get = function Get(i){
-		var len = this.refs.length;
+		var ref, len = this.refs.length;
 		while(i<0 && len > 0){i+=len;}
-		return this.refs[i%len];
+		ref = this.refs[i%len];
+		return ref;
 	}
 	
 	Face.prototype.getFace = function GetFace(){
@@ -86,6 +116,7 @@ var Face = function(){
 	
 	Face.prototype.getLoop = function GetLoop(d, l){
 		var list = l || [];
+		console.log("getting loop in direction", d);
 		if(list.indexOf(this) < 0){
 			list.push(this);
 			this.get(d).getLoop(d, list);
@@ -135,6 +166,7 @@ var Adapter = function(){
 	}
 	
 	Adapter.prototype.getLoop = function GetLoop(d, list){
+		console.log(this.directionOffset, this.target);
 		return this.target.getLoop.bind(this.target)(d+this.directionOffset, list);
 	}
 	
@@ -157,33 +189,46 @@ var Adapter = function(){
 	return Adapter;
 }();
 
+
+var done = 0;
 function debugFace(face){
-	face.components.push({
+	face.getFace().components.push({
 		ref:  face.getFace(),
 		draw: function(c){
-			c.rotate(-this.ref.rotation);
-			for(var ii = 0, ll = this.ref.getRefs().length, col=['#fff', '#0f0', '#f0f', '#000']; ii<ll; ii++){
-				var next = this.ref.get(ii).getFace();
+			
+			for(var ii = 0, ll = this.ref.getRefs().length, col=['#fff', '#f00', '#ff0', '#0ff']; ii<ll; ii++){
+				var nextAdapter = this.ref.get(ii);
+				var next = nextAdapter.getFace();
+				
 				if(next){
-					c.translate(-face.x, -face.y);
+					var nextX = next.x + 15;
+					var nextY = next.y + 15;
+					
 					c.beginPath();
-					c.moveTo(this.ref.x, this.ref.y);
-					c.lineTo(next.x, next.y);
+					
+					c.moveTo(15 + (Math.cos(ii * Math.PI/2)*15), 15 + (Math.sin(ii * Math.PI/2)*15));
+					//c.moveTo(0, 0);
+					
+					c.rotate(-this.ref.rotation);
+					c.lineTo(nextX - this.ref.x - 15, nextY - this.ref.y - 15);
+					c.rotate(this.ref.rotation);
+					
 					c.strokeStyle = col[ii];
 					c.stroke();
-					c.translate(face.x, face.y);
+					
 				}else{
 					console.log('wtf', next);
 				}
 			}
-			c.rotate(this.ref.rotation);
 		}
 	});//*/
 }
 
-function debugLoop(dir, face){
+function debugLoop(dir, face, depth){
+	if(!depth) depth = 255;
 	var loop = face.getLoop(dir);
-	for(var i = 0; i<loop.length; i++){
+	console.log("Loop:", loop);
+	for(var i = 0; i<loop.length && i < depth; i++){
 		var f = loop[i];
 		f.components.push({
 			face: f,
@@ -197,9 +242,9 @@ function debugLoop(dir, face){
 			}
 		})
 	}//*/
+	return loop;
 	
 }
-
 
 function getCoordsFromDirection(d){
 	return {
@@ -208,90 +253,98 @@ function getCoordsFromDirection(d){
 	};
 }
 
-$(function($){
+function buildCube(d){
+	var i, j, lastFace, lastLayer, layers = [], faces = [];
 	
+	var rotationOffset = Math.PI/d;
+	
+	var colorScheme = ['silver', 'red', 'green', 'blue', 'gold', 'cyan'];
+	
+	d = Math.abs(~~d);
+	
+	var sides = d*(d-1);
+	for(i = 0; i<sides; i++){
+		faces[i] = new Face({
+			x: 1 + i * 32,
+			y : 1 + j * 32,
+			color: colorScheme[i%d] //'#'+ ('000000' + Math.floor(Math.random()*0x1000000).toString(16)).slice(-6)
+		});
+	}
+	
+	for(i = 0; i<d-1; i++){ // lattice layers = d-1
+		
+		var layer = faces.slice(i*d, (i+1)*d);
+		for(j = 0; j < d; j++){ // faces per layer
+			var up, left, right, down, offset = 0, face = layer[j]
+			
+			// face.color = colorScheme[i];
+			// if(!j)debugFace(face);
+			
+			var rotation = (Math.PI*2)/d*j + rotationOffset * i;
+			
+			face.rotation = rotation + Math.PI *0.75;
+			face.x = 32 * (d-i) * Math.cos(rotation);
+			face.y = 32 * (d-i) * Math.sin(rotation);
+			
+			if(!lastLayer){ // if this is the outermost layer
+				up = layer[(j+1)%d];
+				left = layer[(j+d-1)%d];
+				offset = 1;
+				
+			}else{ // if it's not the innermost layer
+				up = lastLayer[(j+1)%d];
+				left = lastLayer[j];
+			}
+			
+			face.set(3, new Adapter(offset, up));
+			up.set(1, new Adapter( -offset, face));
+			face.set(2, new Adapter(offset, left));
+			left.set(0, new Adapter(-offset, face));
+			
+			if(i===d-2){ // this is the innermost layer
+				right = layer[(j+1)%d];
+				down = layer[(j+d-1)%d];
+				
+				face.set(0, new Adapter(-1, right));
+				face.set(1, new Adapter(1, down));
+			}else{
+				// nothing to do, right and down will be set by lower layers
+			}
+		}
+		lastLayer = layer;
+	}
+	
+	return faces;
+}
+
+$(function($){
+	var dimentions = 4;
 	var top = new Face({color: "#f00", x:0, y: 64, width: 31, height: 31, sides:4}),
 		bot = new Face({color: "#00f", x:0, y: 128, width: 31, height: 31, sides:4}),
 		centerX = $('body').width()/2,
 		centerY = $('body').height()/2,
 		faces = [],
 		colors = ['rgba(255, 255, 0, 0.5)', 'rgba(0, 255, 0, 0.5)', 'rgba(0, 255, 255, 0.5)', 'rgba(255, 0, 255, 0.5)'];
-		
-	faces.push(top);
-	for(var i = 0; i<4; i++){
-		// create intermediary faces
-		var face = new Face({color: colors[i], x:32, y:32*i, width: 31, height: 31, sides:4});
-		
-		// connect to top and bottom
-		top.set(i, new Adapter(-i, face));
-		bot.set((4-i)%4, new Adapter(-(2-i)%4, face));
-		
-		face.set(2, new Adapter(i, top));
-		face.set(0, new Adapter(2-i, bot));
-		
-		// connect to up and down if they exist
-		if(i>0){
-			face.set(3, new Adapter(0, faces[i]));
-			faces[i].set(1, new Adapter(0, face));
-		}
-		if(i===3){
-			face.set(1, new Adapter(0, faces[1]));
-			faces[1].set(3, new Adapter(0, face));
-		}
-		
-		faces.push(face);
-	}
-	faces.push(bot);
+	
+	faces = buildCube(dimentions);
 	
 	// add 9 "tiles" into each face, which are also faces
 	for(var j = 0, l = faces.length; j<l; j++ ){
 		var f = faces[j];
 		for(var k = 0; k<9; k++){
-			var x = (k % 3)*10 +1;
-			var y = Math.floor(k / 3)*10+1;
-			f.components.push(new Face({color: f.color, x:x, y:y, width: 9, height: 9, sides:4}));
+			var x = (k % 3)*10;
+			var y = Math.floor(k / 3)*10;
+			f.components.push(new Face({color: (!k)?'#fff':f.color, x:x, y:y, width: 9, height: 9, sides:4}));
 		}
 		f.color = 'rgba(0, 0, 0, 0.3)';
 	}
 	
-	for(var ri = 0, rr = [32, 64], rl = 2; ri<rl; ri++){
-		
-		var radialOffset = -Math.PI/2;
-		for(var ci = 0; ci<3; ci++){
-			
-			var face = faces[ri*3+ci];
-			var r = Math.PI*2/3 * ci + radialOffset - Math.PI/3*ri;
-			
-			face.x = centerX + Math.cos(r) * rr[ri];
-			face.y = centerY + Math.sin(r) * rr[ri];
-			face.rotation = r + Math.PI/4;
-			if(!ri){
-				face.getFace().components.push({
-					draw:function(c){
-						c.strokeStyle = "rgba(255, 255, 255, 0.3)";
-						c.beginPath();
-						c.arc(15, 15, 56, 0, Math.PI * 2, false);
-						c.stroke();
-					}
-				});
-			}
-		}
-	}
+	// debugLoop(0, faces[8]);
+	// debugFace(debugLoop(2, faces[0]).slice(-2, -1)[0]);
+	// debugFace(faces[0]);
+	// debugFace(faces[2].get(0).get(0));
 	
-	// debug lines
-	// debugFace(faces[2]);
-	debugLoop(2, faces[0]);
-	
-	face.getFace().components.push({
-		draw:function(c){
-			c.restore();
-			c.strokeStyle = "rgba(255, 255, 255, 0.3)";
-			c.beginPath();
-			c.arc(centerX+15, centerY+15, 96, 0, Math.PI * 2, false);
-			c.stroke();
-		}
-	});
-	
-	var anim = new Animator(document.getElementById('main'), faces);
-	anim.draw();
+	var anim = new Animator(document.getElementById('main'), [new Face({color:'rgba(0, 0, 0, 0)', x:450, y: 220, wodth: 0, height: 0, components:faces})]);
+	anim.bindInteractions();
+	anim.start();
 });
