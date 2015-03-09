@@ -22,6 +22,7 @@ var Animator = function(){
 	
 	Animator.prototype.draw = function Draw(){
 		this.canvas.width = this.canvas.width;
+		this.update();
 		for(var i = 0, l = this.drawables.length; i<l; i++){
 			var subj = this.drawables[i];
 			subj.draw.bind(subj)(this.context);
@@ -69,6 +70,7 @@ var Face = function(){
 	
 	function Face(opts){
 		this.color = opts.color || "#FFFFFF";
+		this.selectedColor = opts.selectedColor || "#rgba(255, 255, 255, 0.5)";
 		this.originalColor = this.color;
 		this.components = opts.components || [];
 		this.refs = [];
@@ -77,30 +79,50 @@ var Face = function(){
 		
 		this.x = opts.x || 0;
 		this.y = opts.y || 0;
-		this.width = opts.width || 32;
-		this.height = opts.height || 32;
+		this.width = opts.width || 0;
+		this.height = opts.height || 0;
 		this.rotation = opts.rotation || 0;
+		this.scale = opts.scale || 1;
+		this.selected = opts.selected || false;
+		this.selectCoords = null;
 	}
 	
 	Face.prototype.draw = function Draw(c){
 		c.save();
-		c.translate(this.x+this.width/2, this.y+this.height/2);
+		c.translate(this.x, this.y);
 		c.rotate(this.rotation);
-		c.translate(-this.width/2, -this.height/2);
+		//c.translate(-this.width/2, -this.height/2);
+		c.scale(this.scale, this.scale);
 		
-		c.fillStyle = this.color;
+		c.fillStyle = this.selected ? this.selectedColor : this.color;
 		c.fillRect(0, 0, this.width, this.height);
+		
+		if(this.selectCoords){
+			c.save();
+			c.beginPath();
+			c.moveTo(0, 0);
+			c.lineTo(this.selectCoords.x - this.x, this.selectCoords.y - this.y);
+			c.strokeStyle = 'red';
+			c.stroke();
+			c.restore();
+		}
 		
 		if(this.components){
 			for(var i = 0, l = this.components.length; i<l; i++){
 				this.components[i].draw.bind(this.components[i])(c);
 			}
 		}
+		
 		c.restore();
 	}
 	
 	Face.prototype.update = function Update(){
-		
+		//this.rotation += 0.001 * Math.PI*2;
+		if(this.components.length){
+			for(var i = 0, l = this.components.length; i<l; i++){
+				if(this.components[i].update) this.components[i].update();
+			}
+		}
 	}
 	
 	Face.prototype.get = function Get(i){
@@ -116,10 +138,10 @@ var Face = function(){
 	
 	Face.prototype.getLoop = function GetLoop(d, l){
 		var list = l || [];
-		console.log("getting loop in direction", d);
 		if(list.indexOf(this) < 0){
 			list.push(this);
-			this.get(d).getLoop(d, list);
+			var next = this.get(d);
+			if(next) next.getLoop(d, list);
 		}
 		return list;
 		
@@ -139,6 +161,27 @@ var Face = function(){
 	Face.prototype.setColor = function SetFaceColor(c){
 		this.color = c;
 		if(!this.originalcolor) this.originalColor = c;
+	}
+	
+	Face.prototype.select = function(coords){
+		//this.selectCoords = coords;
+		
+		var modifiedCoords = {x: coords.x - this.x, y: coords.y - this.y};
+		var rad = Math.atan2(modifiedCoords.y, modifiedCoords.x) - this.rotation;
+		var d = Math.sqrt(Math.pow(modifiedCoords.x, 2) + Math.pow(modifiedCoords.y, 2)) / this.scale;
+		
+		modifiedCoords.x = Math.cos(rad) * d;
+		modifiedCoords.y = Math.sin(rad) * d;
+		
+		this.selected = (
+			Math.abs(modifiedCoords.x) < this.width/2
+		 && Math.abs(modifiedCoords.y) < this.height/2);
+		
+		this.selected && debugLoop(0, this) && debugLoop(1, this);
+		
+		for(var i = 0, l = this.components.length; i<l; i++){
+			if(this.components[i].select) this.components[i].select(modifiedCoords);
+		}
 	}
 	
 	return Face;
@@ -166,7 +209,6 @@ var Adapter = function(){
 	}
 	
 	Adapter.prototype.getLoop = function GetLoop(d, list){
-		console.log(this.directionOffset, this.target);
 		return this.target.getLoop.bind(this.target)(d+this.directionOffset, list);
 	}
 	
@@ -189,8 +231,73 @@ var Adapter = function(){
 	return Adapter;
 }();
 
+var TransformController = function(){
+	function TransformController(opts){
+		this.rotation = opts.rotation || 0;
+		this.x = opts.x || 0;
+		this.y = opts.y || 0;
+		this.target = opts.target || null;
+		this.follow = opts.follow || null;
+		this.active = false;
+	}
+	
+	TransformController.prototype.draw = function(c){
+		c.save();
+		c.setTransform(1, 0, 0, 1, 0, 0);
+		
+		
+		c.shadowColor = '#999';
+		c.shadowBlur = 1;
+		c.shadowOffsetX = 0;
+		c.shadowOffsetY = 2;
+		
+		c.beginPath();
+		c.arc(this.x, this.y, 196, 0, Math.PI*2, false);
+		c.strokeStyle = "rgba(255, 255, 255, 0.75)";
+		c.stroke();
+		
+		c.beginPath();
+		c.arc(this.x, this.y, 8, 0, Math.PI*2, false);
+		c.strokeStyle = "rgba(255, 255, 255, 0.75)";
+		c.stroke();
+		
+		c.beginPath();
+		c.arc(this.x - Math.cos(this.rotation) * 196, this.y - Math.sin(this.rotation) * 196, 8, 0, Math.PI*2, false);
+		
+		c.fillStyle = !this.active ? 'rgba(255, 255, 255, .5)' : 'white';
+		c.fill();
+		c.strokeStyle = "rgba(255, 255, 255, 0.75)";
+		c.stroke();
+		
+		c.restore();
+		
+		this.target.draw(c);
+	}
+	
+	TransformController.prototype.update = function(){
+		if(this.target){
+			if(this.follow && this.active) this.rotation = Math.atan2(this.y - this.follow.y, this.x - this.follow.x);
+			this.target.rotation = this.rotation;
+			this.target.x = this.x;
+			this.target.y = this.y;
+			this.target.update();
+		}
+	}
+	
+	TransformController.prototype.activate = function(){
+		if(this.follow &&
+			Math.abs(this.follow.x - (this.x - Math.cos(this.rotation) * 196)) < 16 &&
+			Math.abs(this.follow.y - (this.y - Math.sin(this.rotation) * 196)) < 16)
+				this.active = true;
+	}
+	
+	TransformController.prototype.deactivate = function(){
+		this.active = false;
+	}
+	
+	return TransformController;
+}();
 
-var done = 0;
 function debugFace(face){
 	face.getFace().components.push({
 		ref:  face.getFace(),
@@ -227,7 +334,6 @@ function debugFace(face){
 function debugLoop(dir, face, depth){
 	if(!depth) depth = 255;
 	var loop = face.getLoop(dir);
-	console.log("Loop:", loop);
 	for(var i = 0; i<loop.length && i < depth; i++){
 		var f = loop[i];
 		f.components.push({
@@ -253,21 +359,28 @@ function getCoordsFromDirection(d){
 	};
 }
 
-function buildCube(d){
+function buildCube(d, r, ro){
+	var colorScheme = [
+		'#f00', '#0f0', '#00f', '#ff0', '#0ff',
+		'#f0f', '#f80', '#0f8', '#80f', '#8f0',
+		'#08f', '#f08', '#8ff', '#f8f', '#ff8',
+		'#088', '#808', '#88f', '#f88', '#8f8',
+	];
 	var i, j, lastFace, lastLayer, layers = [], faces = [];
-	
 	var rotationOffset = Math.PI/d;
 	
-	var colorScheme = ['silver', 'red', 'green', 'blue', 'gold', 'cyan'];
-	
 	d = Math.abs(~~d);
+	r = r || 32;
+	ro = ro || 0;
 	
 	var sides = d*(d-1);
 	for(i = 0; i<sides; i++){
 		faces[i] = new Face({
-			x: 1 + i * 32,
-			y : 1 + j * 32,
-			color: colorScheme[i%d] //'#'+ ('000000' + Math.floor(Math.random()*0x1000000).toString(16)).slice(-6)
+			x: i * 32,
+			y : j * 32,
+			width: 32,
+			height: 32,
+			color: colorScheme[i] //'#'+ ('000000' + Math.floor(Math.random()*0x1000000).toString(16)).slice(-6)
 		});
 	}
 	
@@ -283,8 +396,8 @@ function buildCube(d){
 			var rotation = (Math.PI*2)/d*j + rotationOffset * i;
 			
 			face.rotation = rotation + Math.PI *0.75;
-			face.x = 32 * (d-i) * Math.cos(rotation);
-			face.y = 32 * (d-i) * Math.sin(rotation);
+			face.x = (ro + r * (d-i)) * Math.cos(rotation);
+			face.y = (ro + r * (d-i)) * Math.sin(rotation);
 			
 			if(!lastLayer){ // if this is the outermost layer
 				up = layer[(j+1)%d];
@@ -296,9 +409,9 @@ function buildCube(d){
 				left = lastLayer[j];
 			}
 			
-			face.set(3, new Adapter(offset, up));
-			up.set(1, new Adapter( -offset, face));
-			face.set(2, new Adapter(offset, left));
+			face.set(3, new Adapter (offset, up));
+			up.set(1, new Adapter(-offset, face));
+			face.set(2, new Adapter( offset, left));
 			left.set(0, new Adapter(-offset, face));
 			
 			if(i===d-2){ // this is the innermost layer
@@ -318,15 +431,10 @@ function buildCube(d){
 }
 
 $(function($){
-	var dimentions = 4;
-	var top = new Face({color: "#f00", x:0, y: 64, width: 31, height: 31, sides:4}),
-		bot = new Face({color: "#00f", x:0, y: 128, width: 31, height: 31, sides:4}),
-		centerX = $('body').width()/2,
-		centerY = $('body').height()/2,
-		faces = [],
-		colors = ['rgba(255, 255, 0, 0.5)', 'rgba(0, 255, 0, 0.5)', 'rgba(0, 255, 255, 0.5)', 'rgba(255, 0, 255, 0.5)'];
-	
-	faces = buildCube(dimentions);
+	var dimentions = 3;
+	var centerX = $('body').width()/2, centerY = $('body').height()/2,
+		colors = ['rgba(255, 255, 0, 0.5)', 'rgba(0, 255, 0, 0.5)', 'rgba(0, 255, 255, 0.5)', 'rgba(255, 0, 255, 0.5)'],
+		faces = buildCube(dimentions, 32, 0);
 	
 	// add 9 "tiles" into each face, which are also faces
 	for(var j = 0, l = faces.length; j<l; j++ ){
@@ -334,17 +442,55 @@ $(function($){
 		for(var k = 0; k<9; k++){
 			var x = (k % 3)*10;
 			var y = Math.floor(k / 3)*10;
-			f.components.push(new Face({color: (!k)?'#fff':f.color, x:x, y:y, width: 9, height: 9, sides:4}));
+			f.components.push(new Face({color: f.color, x:x, y:y, width: 9, height: 9, sides:4}));
 		}
-		f.color = 'rgba(0, 0, 0, 0.3)';
-	}
+		f.color = 'rgba(0, 0, 0, 0.15)';
+	}//*/
 	
+	
+	
+	var mouse = {x: 0, y: 0};
+	var container = new Face({color:'rgba(0, 0, 0, 0)', x:450, y: 220, wodth: 0, height: 0, components:faces, scale: 1.5});
+	var controls = new TransformController({
+		target: container,
+		rotation: -Math.PI/2,
+		follow: mouse,
+		x: window.innerWidth/2,
+		y: window.innerHeight/2,
+	});
+	
+	
+	
+	$(window).on('mousedown', function(e){
+		e.preventDefault();
+		controls.activate();
+		
+	}).on('mouseup', function(e){
+		e.preventDefault();
+		controls.deactivate();
+		
+	}).on('mouseout', function(){
+		controls.deactivate();
+		
+	}).on('mousemove', function(e){
+		mouse.x = e.pageX;
+		mouse.y = e.pageY;
+		container.select(mouse);
+		
+	}).on('resize', function(e){
+		controls.x = window.innerWidth/2;
+		controls.y = window.innerHeight/2;
+		
+	});
+	
+	
+	// debugLoop(0, faces[0]);
 	// debugLoop(0, faces[8]);
 	// debugFace(debugLoop(2, faces[0]).slice(-2, -1)[0]);
 	// debugFace(faces[0]);
 	// debugFace(faces[2].get(0).get(0));
 	
-	var anim = new Animator(document.getElementById('main'), [new Face({color:'rgba(0, 0, 0, 0)', x:450, y: 220, wodth: 0, height: 0, components:faces})]);
+	var anim = new Animator(document.getElementById('main'), [controls]);
 	anim.bindInteractions();
 	anim.start();
 });
