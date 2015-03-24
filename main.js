@@ -117,8 +117,8 @@ var Face = function(){
 	}
 	
 	Face.prototype.update = function Update(){
-		//this.rotation += 0.001 * Math.PI*2;
 		if(this.components.length){
+			// this.rotation += 0.001 * Math.PI*2;
 			for(var i = 0, l = this.components.length; i<l; i++){
 				if(this.components[i].update) this.components[i].update();
 			}
@@ -174,14 +174,23 @@ var Face = function(){
 		modifiedCoords.y = Math.sin(rad) * d;
 		
 		this.selected = (
-			Math.abs(modifiedCoords.x) < this.width/2
-		 && Math.abs(modifiedCoords.y) < this.height/2);
+			Math.abs(modifiedCoords.x - this.width/2) < this.width/2
+		 && Math.abs(modifiedCoords.y - this.height/2) < this.height/2);
 		
-		this.selected && debugLoop(0, this) && debugLoop(1, this);
+		//this.selected && debugLoop(0, this) && debugLoop(1, this);
+		
+		var selected = [];
+		if(this.selected) selected.push(this);
 		
 		for(var i = 0, l = this.components.length; i<l; i++){
-			if(this.components[i].select) this.components[i].select(modifiedCoords);
+			if(this.components[i].select &&this.components[i].select(modifiedCoords))
+				selected.push(this.components[i]);
 		}
+		/*if(this.selected)
+			this.getLoop(0).concat(this.getLoop(1)).forEach(function(i, o){
+				console.log("Selecting loop");
+			});//*/
+		return selected; //this.selected;
 	}
 	
 	return Face;
@@ -236,6 +245,7 @@ var TransformController = function(){
 		this.rotation = opts.rotation || 0;
 		this.x = opts.x || 0;
 		this.y = opts.y || 0;
+		this.radius = opts.radius || 196;
 		this.target = opts.target || null;
 		this.follow = opts.follow || null;
 		this.active = false;
@@ -252,17 +262,17 @@ var TransformController = function(){
 		c.shadowOffsetY = 2;
 		
 		c.beginPath();
-		c.arc(this.x, this.y, 196, 0, Math.PI*2, false);
+		c.arc(this.x, this.y, this.radius, 0, Math.PI*2, false);
 		c.strokeStyle = "rgba(255, 255, 255, 0.75)";
 		c.stroke();
 		
 		c.beginPath();
-		c.arc(this.x, this.y, 8, 0, Math.PI*2, false);
+		c.arc(this.x, this.y, 4, 0, Math.PI*2, false);
 		c.strokeStyle = "rgba(255, 255, 255, 0.75)";
 		c.stroke();
 		
 		c.beginPath();
-		c.arc(this.x - Math.cos(this.rotation) * 196, this.y - Math.sin(this.rotation) * 196, 8, 0, Math.PI*2, false);
+		c.arc(this.x - Math.cos(this.rotation) * this.radius, this.y - Math.sin(this.rotation) * this.radius, 8, 0, Math.PI*2, false);
 		
 		c.fillStyle = !this.active ? 'rgba(255, 255, 255, .5)' : 'white';
 		c.fill();
@@ -286,8 +296,8 @@ var TransformController = function(){
 	
 	TransformController.prototype.activate = function(){
 		if(this.follow &&
-			Math.abs(this.follow.x - (this.x - Math.cos(this.rotation) * 196)) < 16 &&
-			Math.abs(this.follow.y - (this.y - Math.sin(this.rotation) * 196)) < 16)
+			Math.abs(this.follow.x - (this.x - Math.cos(this.rotation) * this.radius)) < 16 &&
+			Math.abs(this.follow.y - (this.y - Math.sin(this.rotation) * this.radius)) < 16)
 				this.active = true;
 	}
 	
@@ -360,12 +370,7 @@ function getCoordsFromDirection(d){
 }
 
 function buildCube(d, r, ro){
-	var colorScheme = [
-		'#f00', '#0f0', '#00f', '#ff0', '#0ff',
-		'#f0f', '#f80', '#0f8', '#80f', '#8f0',
-		'#08f', '#f08', '#8ff', '#f8f', '#ff8',
-		'#088', '#808', '#88f', '#f88', '#8f8',
-	];
+
 	var i, j, lastFace, lastLayer, layers = [], faces = [];
 	var rotationOffset = Math.PI/d;
 	
@@ -376,11 +381,11 @@ function buildCube(d, r, ro){
 	var sides = d*(d-1);
 	for(i = 0; i<sides; i++){
 		faces[i] = new Face({
-			x: i * 32,
-			y : j * 32,
-			width: 32,
-			height: 32,
-			color: colorScheme[i] //'#'+ ('000000' + Math.floor(Math.random()*0x1000000).toString(16)).slice(-6)
+			x: i * 31,
+			y : j * 31,
+			width: 31,
+			height: 31,
+			color: 'hsl(' + Math.floor(360/sides*i) + ', 100%, 50%)' //'#'+ ('000000' + Math.floor(Math.random()*0x1000000).toString(16)).slice(-6)
 		});
 	}
 	
@@ -396,8 +401,8 @@ function buildCube(d, r, ro){
 			var rotation = (Math.PI*2)/d*j + rotationOffset * i;
 			
 			face.rotation = rotation + Math.PI *0.75;
-			face.x = (ro + r * (d-i)) * Math.cos(rotation);
-			face.y = (ro + r * (d-i)) * Math.sin(rotation);
+			face.x = (ro + r * (d-i)/2) * Math.cos(rotation);
+			face.y = (ro + r * (d-i)/2) * Math.sin(rotation);
 			
 			if(!lastLayer){ // if this is the outermost layer
 				up = layer[(j+1)%d];
@@ -427,49 +432,73 @@ function buildCube(d, r, ro){
 		lastLayer = layer;
 	}
 	
-	return faces;
-}
-
-$(function($){
-	var dimentions = 3;
-	var centerX = $('body').width()/2, centerY = $('body').height()/2,
-		colors = ['rgba(255, 255, 0, 0.5)', 'rgba(0, 255, 0, 0.5)', 'rgba(0, 255, 255, 0.5)', 'rgba(255, 0, 255, 0.5)'],
-		faces = buildCube(dimentions, 32, 0);
-	
 	// add 9 "tiles" into each face, which are also faces
 	for(var j = 0, l = faces.length; j<l; j++ ){
 		var f = faces[j];
 		for(var k = 0; k<9; k++){
-			var x = (k % 3)*10;
-			var y = Math.floor(k / 3)*10;
-			f.components.push(new Face({color: f.color, x:x, y:y, width: 9, height: 9, sides:4}));
+			var x = 1 + (k % 3)*10;
+			var y = 1 + Math.floor(k / 3)*10;
+			var face = new Face({color: f.color, x:x, y:y, width: 9, height: 9, sides:4});
+			
+			var up  =	(k>3) ? faces[k-3] : null;
+			var left =	(k%3) ? faces[k-1] : null;
+			
+			if(left) left.set(0, new Adapter(0, face)), face.set(3, new Adapter(0, left));
+			if(up)	 up.set(  1, new Adapter(0, face)), face.set(2, new Adapter(0, up));
+			
+			f.components.push(face);
 		}
 		f.color = 'rgba(0, 0, 0, 0.15)';
+		f.selectedColor = 'rgba(0, 0, 0, 0.15)';
 	}//*/
 	
+	return faces;
+}
+
+$(function($){
+	var dimentions = Math.max(2, parseInt($('#dimensions').val())),
+		mouse = {x: 0, y: 0},
+		centerX = $('body').width()/2, centerY = $('body').height()/2,
+		colors = ['rgba(255, 255, 0, 0.5)', 'rgba(0, 255, 0, 0.5)', 'rgba(0, 255, 255, 0.5)', 'rgba(255, 0, 255, 0.5)'],
+		faces = buildCube(dimentions, 50, 0);
+
+	var container = new Face({
+		x:450,
+		y: 220,
+		width: 0,
+		height: 0,
+		scale: 1.5,
+		components:faces,
+		color:'rgba(0, 0, 0, 0)'
+	});
 	
-	
-	var mouse = {x: 0, y: 0};
-	var container = new Face({color:'rgba(0, 0, 0, 0)', x:450, y: 220, wodth: 0, height: 0, components:faces, scale: 1.5});
 	var controls = new TransformController({
-		target: container,
-		rotation: -Math.PI/2,
 		follow: mouse,
+		target: container,
+		radius: Math.floor(dimentions/2*(Math.sqrt(1800)+31+10)),
+		rotation: -Math.PI/2,
 		x: window.innerWidth/2,
 		y: window.innerHeight/2,
 	});
 	
 	
 	
-	$(window).on('mousedown', function(e){
+	$(window).on('resize', function(e){
+		controls.x = window.innerWidth/2;
+		controls.y = window.innerHeight/2;
+		
+	});
+	
+	$('body').on('mousedown', 'canvas', function(e){
 		e.preventDefault();
 		controls.activate();
+		console.log(container.select(mouse));
 		
-	}).on('mouseup', function(e){
+	}).on('mouseup', 'canvas', function(e){
 		e.preventDefault();
 		controls.deactivate();
 		
-	}).on('mouseout', function(){
+	}).on('mouseout', 'canvas', function(e){
 		controls.deactivate();
 		
 	}).on('mousemove', function(e){
@@ -477,18 +506,14 @@ $(function($){
 		mouse.y = e.pageY;
 		container.select(mouse);
 		
-	}).on('resize', function(e){
-		controls.x = window.innerWidth/2;
-		controls.y = window.innerHeight/2;
+	}).on('submit change', '#generator', function(e){
+		e.preventDefault();
+		delete container.components;
+		var n = Math.max(2, parseInt($('#dimensions').val()));
+		container.components = buildCube(n, 50, 2);
+		controls.radius = Math.floor(n/2*(Math.sqrt(1800)+31+10));
 		
 	});
-	
-	
-	// debugLoop(0, faces[0]);
-	// debugLoop(0, faces[8]);
-	// debugFace(debugLoop(2, faces[0]).slice(-2, -1)[0]);
-	// debugFace(faces[0]);
-	// debugFace(faces[2].get(0).get(0));
 	
 	var anim = new Animator(document.getElementById('main'), [controls]);
 	anim.bindInteractions();

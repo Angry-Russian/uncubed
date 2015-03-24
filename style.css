@@ -3,6 +3,10 @@ html, body, #main{
     background: #f0f0f0;
 }
 
+#generator{
+    position: absolute; top: 0; text-align: center; z-index: 10;
+}
+
 #title{
     position: absolute; top: 0; right: 0; font-family: sans-serif; color: #eee;
 }
