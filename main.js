@@ -179,18 +179,14 @@ var Face = function(){
 		
 		//this.selected && debugLoop(0, this) && debugLoop(1, this);
 		
-		var selected = [];
-		if(this.selected) selected.push(this);
-		
 		for(var i = 0, l = this.components.length; i<l; i++){
-			if(this.components[i].select &&this.components[i].select(modifiedCoords))
-				selected.push(this.components[i]);
+			if(this.components[i].select){
+				if(this.components[i].select(modifiedCoords)){
+					// console.log(this.components[i]);
+				}
+			}
 		}
-		/*if(this.selected)
-			this.getLoop(0).concat(this.getLoop(1)).forEach(function(i, o){
-				console.log("Selecting loop");
-			});//*/
-		return selected; //this.selected;
+		return this.selected;
 	}
 	
 	return Face;
@@ -385,7 +381,8 @@ function buildCube(d, r, ro){
 			y : j * 31,
 			width: 31,
 			height: 31,
-			color: 'hsl(' + Math.floor(360/sides*i) + ', 100%, 50%)' //'#'+ ('000000' + Math.floor(Math.random()*0x1000000).toString(16)).slice(-6)
+			color: 'hsl(' + Math.floor(360/sides*i) + ', 100%, 50%)', //'#'+ ('000000' + Math.floor(Math.random()*0x1000000).toString(16)).slice(-6)
+			selectedColor: 'hsl(' + Math.floor(360/sides*i) + ', 100%, 80%)'
 		});
 	}
 	
@@ -438,7 +435,7 @@ function buildCube(d, r, ro){
 		for(var k = 0; k<9; k++){
 			var x = 1 + (k % 3)*10;
 			var y = 1 + Math.floor(k / 3)*10;
-			var face = new Face({color: f.color, x:x, y:y, width: 9, height: 9, sides:4});
+			var face = new Face({color: f.color, selectedColor:f.selectedColor, x:x, y:y, width: 9, height: 9, sides:4});
 			
 			var up  =	(k>3) ? faces[k-3] : null;
 			var left =	(k%3) ? faces[k-1] : null;
@@ -458,8 +455,8 @@ function buildCube(d, r, ro){
 $(function($){
 	var dimentions = Math.max(2, parseInt($('#dimensions').val())),
 		mouse = {x: 0, y: 0},
-		centerX = $('body').width()/2, centerY = $('body').height()/2,
-		colors = ['rgba(255, 255, 0, 0.5)', 'rgba(0, 255, 0, 0.5)', 'rgba(0, 255, 255, 0.5)', 'rgba(255, 0, 255, 0.5)'],
+		centerX = $('body').width()/2,
+		centerY = $('body').height()/2,
 		faces = buildCube(dimentions, 50, 0);
 
 	var container = new Face({
