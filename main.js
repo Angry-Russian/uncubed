@@ -138,9 +138,11 @@ var Face = function(){
 	
 	Face.prototype.getLoop = function GetLoop(d, l){
 		var list = l || [];
+		console.log('checking', this);
 		if(list.indexOf(this) < 0){
 			list.push(this);
 			var next = this.get(d);
+			console.log(' - next', next);
 			if(next) next.getLoop(d, list);
 		}
 		return list;
@@ -179,14 +181,17 @@ var Face = function(){
 		
 		//this.selected && debugLoop(0, this) && debugLoop(1, this);
 		
+		var sel = [];
+		
+		if(this.selected) sel.push(this);
+		
 		for(var i = 0, l = this.components.length; i<l; i++){
 			if(this.components[i].select){
-				if(this.components[i].select(modifiedCoords)){
-					// console.log(this.components[i]);
-				}
+				var s = this.components[i].select(modifiedCoords);
+				sel = sel.concat(s);
 			}
 		}
-		return this.selected;
+		return sel;
 	}
 	
 	return Face;
@@ -376,13 +381,14 @@ function buildCube(d, r, ro){
 	
 	var sides = d*(d-1);
 	for(i = 0; i<sides; i++){
+		var rc = Math.floor(360/sides*i);
 		faces[i] = new Face({
 			x: i * 31,
 			y : j * 31,
 			width: 31,
 			height: 31,
-			color: 'hsl(' + Math.floor(360/sides*i) + ', 100%, 50%)', //'#'+ ('000000' + Math.floor(Math.random()*0x1000000).toString(16)).slice(-6)
-			selectedColor: 'hsl(' + Math.floor(360/sides*i) + ', 100%, 80%)'
+			color: 'hsl(' + rc + ', 100%, 50%)',
+			selectedColor: 'hsl(' + rc + ', 100%, 85%)'
 		});
 	}
 	
@@ -390,7 +396,7 @@ function buildCube(d, r, ro){
 		
 		var layer = faces.slice(i*d, (i+1)*d);
 		for(j = 0; j < d; j++){ // faces per layer
-			var up, left, right, down, offset = 0, face = layer[j]
+			var up, left, right, down, offsetH = 0, offsetV = 0, face = layer[j]
 			
 			// face.color = colorScheme[i];
 			// if(!j)debugFace(face);
@@ -404,17 +410,18 @@ function buildCube(d, r, ro){
 			if(!lastLayer){ // if this is the outermost layer
 				up = layer[(j+1)%d];
 				left = layer[(j+d-1)%d];
-				offset = 1;
+				offsetV = 1;
+				offsetH = -1;
 				
 			}else{ // if it's not the innermost layer
 				up = lastLayer[(j+1)%d];
 				left = lastLayer[j];
 			}
 			
-			face.set(3, new Adapter (offset, up));
-			up.set(1, new Adapter(-offset, face));
-			face.set(2, new Adapter( offset, left));
-			left.set(0, new Adapter(-offset, face));
+			face.set(3, new Adapter (offsetV, up));
+			up.set(1, new Adapter(-offsetV, face));
+			face.set(2, new Adapter( offsetH, left));
+			left.set(0, new Adapter(-offsetH, face));
 			
 			if(i===d-2){ // this is the innermost layer
 				right = layer[(j+1)%d];
@@ -429,27 +436,32 @@ function buildCube(d, r, ro){
 		lastLayer = layer;
 	}
 	
+	subdivide(faces, 3);
+	
+	return faces;
+}
+
+function subdivide(faces, n){
+	var nn = n*n;
 	// add 9 "tiles" into each face, which are also faces
 	for(var j = 0, l = faces.length; j<l; j++ ){
 		var f = faces[j];
-		for(var k = 0; k<9; k++){
-			var x = 1 + (k % 3)*10;
-			var y = 1 + Math.floor(k / 3)*10;
-			var face = new Face({color: f.color, selectedColor:f.selectedColor, x:x, y:y, width: 9, height: 9, sides:4});
+		for(var k = 0; k<nn; k++){
+			var x = 1 + (k % n)*10;
+			var y = 1 + Math.floor(k / n)*10;
+			var face = new Face({color: f.color, selectedColor:f.selectedColor, x:x, y:y, width: f.width/n-1, height: f.height/n-1, sides:4});
 			
-			var up  =	(k>3) ? faces[k-3] : null;
-			var left =	(k%3) ? faces[k-1] : null;
+			/*var up  =	(k>n) ? faces[k-n] : null;
+			var left =	(k%n) ? faces[k-1] : null;
 			
 			if(left) left.set(0, new Adapter(0, face)), face.set(3, new Adapter(0, left));
-			if(up)	 up.set(  1, new Adapter(0, face)), face.set(2, new Adapter(0, up));
+			if(up)	 up.set(  1, new Adapter(0, face)), face.set(2, new Adapter(0, up));//*/
 			
 			f.components.push(face);
 		}
 		f.color = 'rgba(0, 0, 0, 0.15)';
-		f.selectedColor = 'rgba(0, 0, 0, 0.15)';
+		f.selectedColor = 'rgba(0, 0, 0, 1)';
 	}//*/
-	
-	return faces;
 }
 
 $(function($){
@@ -489,7 +501,23 @@ $(function($){
 	$('body').on('mousedown', 'canvas', function(e){
 		e.preventDefault();
 		controls.activate();
-		console.log(container.select(mouse));
+		
+		var loop = [];
+		var selected = container.select(mouse);
+		console.log('selected', selected[0]);
+		console.log('getting first loop (0)');
+		loop = selected[0].getLoop(0);
+		for(var i = 0, l = loop.length; i<l; i++){
+			loop[i].selectedColor = '#F00';
+			loop[i].selected = true;
+		}
+		
+		console.log('getting second loop (1)');
+		loop = selected[0].getLoop(1);
+		for(var i = 0, l = loop.length; i<l; i++){
+			loop[i].selectedColor = loop[i].selected?'#0F0':'#00F';
+			loop[i].selected = true;
+		}
 		
 	}).on('mouseup', 'canvas', function(e){
 		e.preventDefault();
@@ -501,7 +529,7 @@ $(function($){
 	}).on('mousemove', function(e){
 		mouse.x = e.pageX;
 		mouse.y = e.pageY;
-		container.select(mouse);
+		// container.select(mouse);
 		
 	}).on('submit change', '#generator', function(e){
 		e.preventDefault();
