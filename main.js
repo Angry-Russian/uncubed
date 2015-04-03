@@ -136,13 +136,15 @@ var Face = function(){
 		return this;
 	}
 	
+	Face.prototype.getComponents = function() {
+		return this.components;
+	}
+
 	Face.prototype.getLoop = function GetLoop(d, l){
 		var list = l || [];
-		console.log('checking', this);
 		if(list.indexOf(this) < 0){
 			list.push(this);
 			var next = this.get(d);
-			console.log(' - next', next);
 			if(next) next.getLoop(d, list);
 		}
 		return list;
@@ -224,6 +226,57 @@ var Adapter = function(){
 	
 	Adapter.prototype.getFace = function GetFace(){
 		return this.target;
+	}
+	
+	function transpose(array){
+		var side = Math.ceil(Math.sqrt(array.length));
+		var copy = [];
+			copy.length = side;
+		array.length = side*side; // make sure array is square
+		
+		for(var i = 0, l = array.length; i<l; i++){
+			var x = i%side, y = Math.floor(i/side);
+			copy[y] = copy[y]||[];
+			copy[y].length = side;
+			copy[y][x] = array[x][y];
+		}
+		return copy;
+	}
+	
+	function flip(array, vertical){
+		var side = Math.ceil(Math.sqrt(array.length));
+		var copy = [];
+			copy.length = side;
+		for(var i = 0, l = array.length; i<l; i++){
+			var x = i%side, y = Math.floor(i/side);
+			copy[x] = copy[x]||[];
+			copy[x].length = side;
+			copy[vertical?x:side-x][vertical?side-y:y] = array[x][y];
+		}
+		return copy;
+	}
+	
+	function rotateCW(array){
+		return flip(transpose(array));
+	}
+
+	function rotateCCW(array){
+		return flip(transpose(array), true);
+	}
+
+	Adapter.prototype.getComponents = function(){
+		var c = this.target.getComponents();
+		var f;
+		if(!this.directionOffset){
+			return c;
+		}else{
+			f = (this.directionOffset > 0)?rotateCW:rotateCCW;
+		}
+
+		for(var i = 0, l = Math.abs(this.directionOffset); i<l; i++){
+			c = f(c);
+		}
+		return c;
 	}
 	
 	Adapter.prototype.getDirectionOffset = function GetDirectionOffset(i){
@@ -451,16 +504,35 @@ function subdivide(faces, n){
 			var y = 1 + Math.floor(k / n)*10;
 			var face = new Face({color: f.color, selectedColor:f.selectedColor, x:x, y:y, width: f.width/n-1, height: f.height/n-1, sides:4});
 			
-			/*var up  =	(k>n) ? faces[k-n] : null;
-			var left =	(k%n) ? faces[k-1] : null;
+			var up, left, side = [
+				!!( !(k%n)		 ||  ((k%n) === n-1)),// bordering left/right
+				!!(~~(k/n) === 0 || ~~(k/n) === n-1) // bordering up/down
+			];
+
+			if(!side[0])
+				up  =	(k>n) ? f.components[k-n] : null;
+			else
+				up  =	(k>n) ? f.get(3).getComponents()[0] : null;
+
+			if(!side[1])
+				left =	(k%n) ? f.components[k-1] : null;
+			else
+				left =	(k%n) ? f.get(2).getComponents()[0] : null;
 			
-			if(left) left.set(0, new Adapter(0, face)), face.set(3, new Adapter(0, left));
-			if(up)	 up.set(  1, new Adapter(0, face)), face.set(2, new Adapter(0, up));//*/
-			
+			if(left){
+				left.set(0, new Adapter(0, face));
+				face.set(3, new Adapter(0, left));
+			}
+
+			if(up){
+				up.set(  1, new Adapter(0, face));
+				face.set(2, new Adapter(0, up));
+			}
+			face.parent = f;
 			f.components.push(face);
 		}
 		f.color = 'rgba(0, 0, 0, 0.15)';
-		f.selectedColor = 'rgba(0, 0, 0, 1)';
+		f.selectedColor = 'rgba(0, 0, 0, 0.15)';
 	}//*/
 }
 
@@ -491,11 +563,9 @@ $(function($){
 	});
 	
 	
-	
 	$(window).on('resize', function(e){
 		controls.x = window.innerWidth/2;
 		controls.y = window.innerHeight/2;
-		
 	});
 	
 	$('body').on('mousedown', 'canvas', function(e){
@@ -504,18 +574,14 @@ $(function($){
 		
 		var loop = [];
 		var selected = container.select(mouse);
-		console.log('selected', selected[0]);
-		console.log('getting first loop (0)');
-		loop = selected[0].getLoop(0);
+
+		if(selected.length) loop = selected[0].getLoop(0).concat(selected[1].getLoop(0));
 		for(var i = 0, l = loop.length; i<l; i++){
-			loop[i].selectedColor = '#F00';
 			loop[i].selected = true;
 		}
 		
-		console.log('getting second loop (1)');
-		loop = selected[0].getLoop(1);
+		if(selected.length) loop = selected[0].getLoop(1).concat(selected[1].getLoop(1));
 		for(var i = 0, l = loop.length; i<l; i++){
-			loop[i].selectedColor = loop[i].selected?'#0F0':'#00F';
 			loop[i].selected = true;
 		}
 		
