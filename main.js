@@ -1,5 +1,46 @@
 "use strict";
 
+function transpose(array){
+	var side = Math.ceil(Math.sqrt(array.length));
+	var copy = [];
+	
+	array.length = side*side; // make sure array is square
+	copy.length = array.length;
+	
+	for(var i = 0, l = array.length; i<l; i++){
+		var x = i%side,
+			y = Math.floor(i/side);
+		copy[y + x * side] = array[i];
+	}
+	return copy;
+}
+
+function flip(array, vertical){
+	var side = Math.ceil(Math.sqrt(array.length));
+	var copy = [];
+	
+	array.length = side*side; // make sure array is square
+	copy.length = array.length;
+	
+	for(var i = 0, l = array.length; i<l; i++){
+		var x = i%side,
+			y = Math.floor(i/side);
+		if(vertical)
+			copy[x + (side - y - 1) * side] = array[i];
+		else
+			copy[(side - x - 1) + y * side] = array[i];
+	}
+	return copy;
+}
+
+function rotateCW(array){
+	return flip(transpose(array));
+}
+
+function rotateCCW(array){
+	return flip(transpose(array), true);
+}
+
 var Animator = function(){
 	
 	function Animator(cnv, drawables){
@@ -178,8 +219,8 @@ var Face = function(){
 		modifiedCoords.y = Math.sin(rad) * d;
 		
 		this.selected = (
-			Math.abs(modifiedCoords.x - this.width/2) < this.width/2
-		 && Math.abs(modifiedCoords.y - this.height/2) < this.height/2);
+			Math.abs(modifiedCoords.x - this.width/2) < this.width/2+0.5
+		 && Math.abs(modifiedCoords.y - this.height/2) < this.height/2+0.5);
 		
 		//this.selected && debugLoop(0, this) && debugLoop(1, this);
 		
@@ -227,42 +268,6 @@ var Adapter = function(){
 	Adapter.prototype.getFace = function GetFace(){
 		return this.target;
 	}
-	
-	function transpose(array){
-		var side = Math.ceil(Math.sqrt(array.length));
-		var copy = [];
-			copy.length = side;
-		array.length = side*side; // make sure array is square
-		
-		for(var i = 0, l = array.length; i<l; i++){
-			var x = i%side, y = Math.floor(i/side);
-			copy[y] = copy[y]||[];
-			copy[y].length = side;
-			copy[y][x] = array[x][y];
-		}
-		return copy;
-	}
-	
-	function flip(array, vertical){
-		var side = Math.ceil(Math.sqrt(array.length));
-		var copy = [];
-			copy.length = side;
-		for(var i = 0, l = array.length; i<l; i++){
-			var x = i%side, y = Math.floor(i/side);
-			copy[x] = copy[x]||[];
-			copy[x].length = side;
-			copy[vertical?x:side-x][vertical?side-y:y] = array[x][y];
-		}
-		return copy;
-	}
-	
-	function rotateCW(array){
-		return flip(transpose(array));
-	}
-
-	function rotateCCW(array){
-		return flip(transpose(array), true);
-	}
 
 	Adapter.prototype.getComponents = function(){
 		var c = this.target.getComponents();
@@ -270,12 +275,13 @@ var Adapter = function(){
 		if(!this.directionOffset){
 			return c;
 		}else{
-			f = (this.directionOffset > 0)?rotateCW:rotateCCW;
+			f = (this.directionOffset > 0)?rotateCCW:rotateCW;
 		}
 
 		for(var i = 0, l = Math.abs(this.directionOffset); i<l; i++){
 			c = f(c);
-		}
+		}//*/
+
 		return c;
 	}
 	
@@ -393,7 +399,7 @@ function debugFace(face){
 			}
 		}
 	});//*/
-}
+};
 
 function debugLoop(dir, face, depth){
 	if(!depth) depth = 255;
@@ -413,19 +419,18 @@ function debugLoop(dir, face, depth){
 		})
 	}//*/
 	return loop;
-	
-}
+};
 
 function getCoordsFromDirection(d){
 	return {
 		x: Math.sin(d*Math.PI/2),
 		y: Math.cos(d*Math.PI/2)
 	};
-}
+};
 
-function buildCube(d, r, ro){
+function buildCube(d, r, ro, n){
 
-	var i, j, lastFace, lastLayer, layers = [], faces = [];
+	var i, j, k = 0, nn = n*n, lastFace, lastLayer, layers = [], faces = [];
 	var rotationOffset = Math.PI/d;
 	
 	d = Math.abs(~~d);
@@ -441,19 +446,22 @@ function buildCube(d, r, ro){
 			width: 31,
 			height: 31,
 			color: 'hsl(' + rc + ', 100%, 50%)',
-			selectedColor: 'hsl(' + rc + ', 100%, 85%)'
+			selectedColor: 'hsl(' + rc + ', 100%, 75%)'
 		});
+
+		for(k = 0; k<nn; k++){
+			var x = 1 + (k % n)*10;
+			var y = 1 + Math.floor(k / n)*10;
+			face = new Face({color: faces[i].color, selectedColor:faces[i].selectedColor, x:x, y:y, width: faces[i].width/n-1, height: faces[i].height/n-1, sides:4});
+			faces[i].components.push(face);
+		}
 	}
 	
 	for(i = 0; i<d-1; i++){ // lattice layers = d-1
 		
 		var layer = faces.slice(i*d, (i+1)*d);
 		for(j = 0; j < d; j++){ // faces per layer
-			var up, left, right, down, offsetH = 0, offsetV = 0, face = layer[j]
-			
-			// face.color = colorScheme[i];
-			// if(!j)debugFace(face);
-			
+			var up, left, right, down, offsetH = 0, offsetV = 0, face = layer[j];
 			var rotation = (Math.PI*2)/d*j + rotationOffset * i;
 			
 			face.rotation = rotation + Math.PI *0.75;
@@ -476,75 +484,84 @@ function buildCube(d, r, ro){
 			face.set(2, new Adapter( offsetH, left));
 			left.set(0, new Adapter(-offsetH, face));
 			
+
 			if(i===d-2){ // this is the innermost layer
 				right = layer[(j+1)%d];
 				down = layer[(j+d-1)%d];
 				
 				face.set(0, new Adapter(-1, right));
 				face.set(1, new Adapter(1, down));
-			}else{
-				// nothing to do, right and down will be set by lower layers
 			}
+
+			for(var fi in face.components){ // for every face
+				var f = face.components[fi];
+				x = fi%n; y = ~~(fi/n);
+				var up, left, // neighboring tiles
+					side = { // tests to check border tiles
+					up:   y === 0,
+					down: y === n-1,
+					left:  x === 0,
+					right: x === n-1,
+				};
+				var tmpOffsetV = offsetV;
+				var tmpOffsetH = offsetH;
+
+				if(side.up){
+					up = face.get(3).getComponents()[n*n-n+x];
+				}else{
+					up = face.components[x + (y-1) * n];
+					tmpOffsetV = 0;
+				}
+
+				if(side.left){
+					left = face.get(2).getComponents()[y*n+n-1];
+				}else{
+					left = face.components[(x-1) + y * n];
+					tmpOffsetH = 0;
+				}
+
+
+
+				if(up){
+					f.set( 3, new Adapter( tmpOffsetV, up));
+					up.set(1+tmpOffsetV, new Adapter( -tmpOffsetV, f));
+				}
+
+				if(left){
+					f.set( 2, new Adapter( tmpOffsetH, left));
+					left.set(0+tmpOffsetH, new Adapter( -tmpOffsetH, f));
+				}
+
+				if(down){
+					down = face.get(1).getComponents()[x];
+					f.set(1, new Adapter( -1, down));
+				}
+
+				if(right){
+					right = face.get(0).getComponents()[y*n];
+					f.set(0, new Adapter( -1, right));
+				}
+
+				f.parent = face;
+			}
+			face.color = 'rgba(0, 0, 0, 0.15)';
+			face.selectedColor = 'rgba(0, 0, 0, 0.15)';
 		}
 		lastLayer = layer;
 	}
 	
-	subdivide(faces, 3);
-	
 	return faces;
-}
-
-function subdivide(faces, n){
-	var nn = n*n;
-	// add 9 "tiles" into each face, which are also faces
-	for(var j = 0, l = faces.length; j<l; j++ ){
-		var f = faces[j];
-		for(var k = 0; k<nn; k++){
-			var x = 1 + (k % n)*10;
-			var y = 1 + Math.floor(k / n)*10;
-			var face = new Face({color: f.color, selectedColor:f.selectedColor, x:x, y:y, width: f.width/n-1, height: f.height/n-1, sides:4});
-			
-			var up, left, side = [
-				!!( !(k%n)		 ||  ((k%n) === n-1)),// bordering left/right
-				!!(~~(k/n) === 0 || ~~(k/n) === n-1) // bordering up/down
-			];
-
-			if(!side[0])
-				up  =	(k>n) ? f.components[k-n] : null;
-			else
-				up  =	(k>n) ? f.get(3).getComponents()[0] : null;
-
-			if(!side[1])
-				left =	(k%n) ? f.components[k-1] : null;
-			else
-				left =	(k%n) ? f.get(2).getComponents()[0] : null;
-			
-			if(left){
-				left.set(0, new Adapter(0, face));
-				face.set(3, new Adapter(0, left));
-			}
-
-			if(up){
-				up.set(  1, new Adapter(0, face));
-				face.set(2, new Adapter(0, up));
-			}
-			face.parent = f;
-			f.components.push(face);
-		}
-		f.color = 'rgba(0, 0, 0, 0.15)';
-		f.selectedColor = 'rgba(0, 0, 0, 0.15)';
-	}//*/
-}
+};
 
 $(function($){
 	var dimentions = Math.max(2, parseInt($('#dimensions').val())),
 		mouse = {x: 0, y: 0},
 		centerX = $('body').width()/2,
 		centerY = $('body').height()/2,
-		faces = buildCube(dimentions, 50, 0);
+		faces = buildCube(dimentions, 50, 0, 3);
 
 	var container = new Face({
-		x:450,
+		x: 450,
 		y: 220,
 		width: 0,
 		height: 0,
@@ -572,19 +589,6 @@ $(function($){
 		e.preventDefault();
 		controls.activate();
 		
-		var loop = [];
-		var selected = container.select(mouse);
-
-		if(selected.length) loop = selected[0].getLoop(0).concat(selected[1].getLoop(0));
-		for(var i = 0, l = loop.length; i<l; i++){
-			loop[i].selected = true;
-		}
-		
-		if(selected.length) loop = selected[0].getLoop(1).concat(selected[1].getLoop(1));
-		for(var i = 0, l = loop.length; i<l; i++){
-			loop[i].selected = true;
-		}
-		
 	}).on('mouseup', 'canvas', function(e){
 		e.preventDefault();
 		controls.deactivate();
@@ -595,13 +599,28 @@ $(function($){
 	}).on('mousemove', function(e){
 		mouse.x = e.pageX;
 		mouse.y = e.pageY;
+
+		
+		var loop = [];
+		var selected = container.select(mouse);
+
+		if(selected.length>1)
+			loop = selected[0].getLoop(2)
+				.concat(selected[1].getLoop(0))
+				.concat(selected[0].getLoop(3))
+				.concat(selected[1].getLoop(3));//*/
+
+		for(var i = 0, l = loop.length; i<l; i++){
+			loop[i].selected = true;
+		}
+		
 		// container.select(mouse);
 		
 	}).on('submit change', '#generator', function(e){
 		e.preventDefault();
 		delete container.components;
 		var n = Math.max(2, parseInt($('#dimensions').val()));
-		container.components = buildCube(n, 50, 2);
+		container.components = buildCube(n, 50, 2, 3);
 		controls.radius = Math.floor(n/2*(Math.sqrt(1800)+31+10));
 		
 	});
