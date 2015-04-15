@@ -428,30 +428,33 @@ function getCoordsFromDirection(d){
 	};
 };
 
-function buildCube(d, r, ro, n){
+function buildCube(d, r, ro, n, w){
 
 	var i, j, k = 0, nn = n*n, lastFace, lastLayer, layers = [], faces = [];
 	var rotationOffset = Math.PI/d;
 	
 	d = Math.abs(~~d);
-	r = r || 32;
+	r = r || 0;
 	ro = ro || 0;
-	
+	w = w || 31;
+
 	var sides = d*(d-1);
 	for(i = 0; i<sides; i++){
 		var rc = Math.floor(360/sides*i);
 		faces[i] = new Face({
-			x: i * 31,
-			y : j * 31,
-			width: 31,
-			height: 31,
+			x: i * w,
+			y : j * w,
+			width: w,
+			height: w,
 			color: 'hsl(' + rc + ', 100%, 50%)',
 			selectedColor: 'hsl(' + rc + ', 100%, 75%)'
 		});
 
+		// add n^2 tiles to each face
+		var s = (w) / n;
 		for(k = 0; k<nn; k++){
-			var x = 1 + (k % n)*10;
-			var y = 1 + Math.floor(k / n)*10;
+			var x = 1 + (k % n)*s;
+			var y = 1 + Math.floor(k / n)*s;
 			face = new Face({color: faces[i].color, selectedColor:faces[i].selectedColor, x:x, y:y, width: faces[i].width/n-1, height: faces[i].height/n-1, sides:4});
 			faces[i].components.push(face);
 		}
@@ -465,8 +468,8 @@ function buildCube(d, r, ro, n){
 			var rotation = (Math.PI*2)/d*j + rotationOffset * i;
 			
 			face.rotation = rotation + Math.PI *0.75;
-			face.x = (ro + r * (d-i)/2) * Math.cos(rotation);
-			face.y = (ro + r * (d-i)/2) * Math.sin(rotation);
+			face.x = (ro + r * (d-i-1)) * Math.cos(rotation);
+			face.y = (ro + r * (d-i-1)) * Math.sin(rotation);
 			
 			if(!lastLayer){ // if this is the outermost layer
 				up = layer[(j+1)%d];
@@ -558,7 +561,8 @@ $(function($){
 		mouse = {x: 0, y: 0},
 		centerX = $('body').width()/2,
 		centerY = $('body').height()/2,
-		faces = buildCube(dimentions, 50, 0, 3);
+		faces = buildCube(dimentions, Math.sqrt(32*32*2)-20, 32, 7);
+		//Math.sqrt(32*32*2)*dimentions/(2*Math.PI) - Math.sqrt(32*32*2)*0.5
 
 	var container = new Face({
 		x: 450,
@@ -585,13 +589,39 @@ $(function($){
 		controls.y = window.innerHeight/2;
 	});
 	
+
+	var hold = null;
+	var selecting = false;
+	var directionRing = {
+		x: 0, y: 0, width: 0, height: 0,
+		draw:function(c){
+			c.beginPath();
+			c.fillStyle = 'white';
+			c.strokeStyle = 'silver';
+			c.arc(this.x, this.y, 32, 0, Math.PI*2, false);
+			c.fill();
+			c.stroke();
+		},
+		update:function(m){
+
+		}
+	};
 	$('body').on('mousedown', 'canvas', function(e){
 		e.preventDefault();
 		controls.activate();
+
+		selecting = true;
+		var selected = container.select(mouse);
+		hold = selected[1];
+		hold.components = [directionRing];
+
 		
 	}).on('mouseup', 'canvas', function(e){
 		e.preventDefault();
 		controls.deactivate();
+		selecting = false;
+		hold.components = [];
+		hold.null;
 		
 	}).on('mouseout', 'canvas', function(e){
 		controls.deactivate();
@@ -601,6 +631,11 @@ $(function($){
 		mouse.y = e.pageY;
 
 		
+		if(selecting) {
+			directionRing.update(mouse);
+			return;
+		}
+
 		var loop = [];
 		var selected = container.select(mouse);
 
@@ -613,14 +648,15 @@ $(function($){
 		for(var i = 0, l = loop.length; i<l; i++){
 			loop[i].selected = true;
 		}
-		
+
 		// container.select(mouse);
 		
 	}).on('submit change', '#generator', function(e){
 		e.preventDefault();
 		delete container.components;
 		var n = Math.max(2, parseInt($('#dimensions').val()));
-		container.components = buildCube(n, 50, 2, 3);
+		container.components = buildCube(n, Math.sqrt(32*32*2)-20, 32, 7);
+		//Math.sqrt(32*32*2)*n/(2*Math.PI) - Math.sqrt(32*32*2)*0.5
 		controls.radius = Math.floor(n/2*(Math.sqrt(1800)+31+10));
 		
 	});
