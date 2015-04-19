@@ -41,6 +41,28 @@ function rotateCCW(array){
 	return flip(transpose(array), true);
 }
 
+
+function shift(loop, n){
+
+	if(!loop || !loop.length) return loop;
+
+	var tile = null;
+	var nextTile = null;
+
+	for(var i = 0, l = loop.length; i<l; i++){
+		tile = loop[i];
+		nextTile = loop[(i+1)%l];
+
+		//nextTile.parent.components[tile.parent.indexOf(tile)] = tile;
+
+		// check each direction
+		// if same parent and same loop, disregard
+		// else if same parent and not in loop, disconnect and reconnect
+	}
+	// if perpendicular and not same parent, rotate. holy shit x_x.
+	// (just shift positions and rotations)
+};
+
 var Animator = function(){
 	
 	function Animator(cnv, drawables){
@@ -447,14 +469,14 @@ function buildCube(d, r, ro, n, w){
 			width: w,
 			height: w,
 			color: 'hsl(' + rc + ', 100%, 50%)',
-			selectedColor: 'hsl(' + rc + ', 100%, 75%)'
+			selectedColor: 'hsl(' + rc + ', 100%, 42%)'
 		});
 
 		// add n^2 tiles to each face
 		var s = (w) / n;
 		for(k = 0; k<nn; k++){
-			var x = 1 + (k % n)*s;
-			var y = 1 + Math.floor(k / n)*s;
+			var x = 0.5 + (k % n)*s;
+			var y = 0.5 + Math.floor(k / n)*s;
 			face = new Face({color: faces[i].color, selectedColor:faces[i].selectedColor, x:x, y:y, width: faces[i].width/n-1, height: faces[i].height/n-1, sides:4});
 			faces[i].components.push(face);
 		}
@@ -537,7 +559,7 @@ function buildCube(d, r, ro, n, w){
 
 				if(down){
 					down = face.get(1).getComponents()[x];
-					f.set(1, new Adapter( -1, down));
+					f.set(1, new Adapter( 1, down));
 				}
 
 				if(right){
@@ -547,8 +569,9 @@ function buildCube(d, r, ro, n, w){
 
 				f.parent = face;
 			}
-			face.color = 'rgba(0, 0, 0, 0.15)';
-			face.selectedColor = 'rgba(0, 0, 0, 0.15)';
+			face.color = face.selectedColor;
+			//face.color = 'rgba(0, 0, 0, 0.15)';
+			//face.selectedColor = 'rgba(0, 0, 0, 0.15)';
 		}
 		lastLayer = layer;
 	}
@@ -561,7 +584,7 @@ $(function($){
 		mouse = {x: 0, y: 0},
 		centerX = $('body').width()/2,
 		centerY = $('body').height()/2,
-		faces = buildCube(dimentions, Math.sqrt(32*32*2)-20, 32, 7);
+		faces = buildCube(dimentions, Math.sqrt(32*32*2)-20, 32, 5);
 		//Math.sqrt(32*32*2)*dimentions/(2*Math.PI) - Math.sqrt(32*32*2)*0.5
 
 	var container = new Face({
@@ -593,35 +616,98 @@ $(function($){
 	var hold = null;
 	var selecting = false;
 	var directionRing = {
-		x: 0, y: 0, width: 0, height: 0,
+		x: 15, y: 15, width: 0, height: 0, target: null, direction:null,
 		draw:function(c){
 			c.beginPath();
-			c.fillStyle = 'white';
-			c.strokeStyle = 'silver';
-			c.arc(this.x, this.y, 32, 0, Math.PI*2, false);
+			c.fillStyle = 'rgba(255, 255, 255, 0.35)';
+			c.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+
+			c.shadowColor = '#999';
+			c.shadowBlur = 1;
+			c.shadowOffsetX = 0;
+			c.shadowOffsetY = 2;
+
+
+			c.arc(this.x, this.y, 10, 0, Math.PI*2, false);
 			c.fill();
-			c.stroke();
+			
+			c.shadowColor = 'rgba(0, 0, 0, 0)';
+			c.shadowBlur = 0;
+			c.shadowOffsetX = 0;
+			c.shadowOffsetY = 0;
+
+			if(this.direction !== null){
+				c.beginPath();
+				var oldFill = c.fillStyle;
+				c.fillStyle = 'rgba(240, 240, 240, .85)';
+				c.moveTo(this.x, this.y);
+				c.arc(this.x, this.y, 8, this.direction - Math.PI/4, this.direction + Math.PI/4, false);
+				c.lineTo(this.x, this.y);
+				c.fill();
+				
+				c.strokeStyle = "#333";
+				c.fillStyle = "#333";
+
+			} else c.strokeStyle = c.fillStyle = "rgba(255, 255, 255, .85)";
+
+			c.beginPath();
+			c.moveTo(-5+this.x, 0+this.y);
+			c.lineTo(0+this.x, 5+this.y);
+			c.lineTo(5+this.x, 0+this.y);
+			c.lineTo(0+this.x, -5+this.y);
+			c.lineTo(-5+this.x, 0+this.y);
+
+			c.moveTo(this.x-2, this.y-2);
+			c.lineTo(this.x+2, this.y-2);
+			c.lineTo(this.x+2, this.y+2);
+			c.lineTo(this.x-2, this.y+2);
+			c.lineTo(this.x-2, this.y-2);
+			
+			c.fill();
+			//c.stroke();
 		},
 		update:function(m){
 
+		},
+		select:function(coords){
+			var x = coords.x - this.x;
+			var y = coords.y - this.y;
+			if(Math.abs(x) > 5 || Math.abs(y) > 5){
+				this.direction = Math.floor((Math.atan2(y, x)+Math.PI/4)/(Math.PI/2))*(Math.PI/2);
+			}else this.direction = null;
 		}
 	};
 	$('body').on('mousedown', 'canvas', function(e){
 		e.preventDefault();
 		controls.activate();
 
-		selecting = true;
 		var selected = container.select(mouse);
-		hold = selected[1];
-		hold.components = [directionRing];
+
+		if(selected.length>0){
+			selecting = true;
+			hold = selected[0];
+			hold.components.push(directionRing);
+			directionRing.x = selected[1].x + selected[1].width/2;
+			directionRing.y = selected[1].y + selected[1].height/2;
+			directionRing.target = selected[1];
+		}
 
 		
 	}).on('mouseup', 'canvas', function(e){
 		e.preventDefault();
 		controls.deactivate();
-		selecting = false;
-		hold.components = [];
-		hold.null;
+		if(selecting){
+			hold = hold.components.pop();
+			hold = null;
+			selecting = false;
+			container.select(mouse);
+
+			var d = directionRing.direction/(Math.PI/2);
+			var loop = directionRing.target.getLoop(d);
+			directionRing.target = null;
+
+			shift(loop);
+		}
 		
 	}).on('mouseout', 'canvas', function(e){
 		controls.deactivate();
@@ -630,32 +716,30 @@ $(function($){
 		mouse.x = e.pageX;
 		mouse.y = e.pageY;
 
-		
-		if(selecting) {
-			directionRing.update(mouse);
-			return;
-		}
-
 		var loop = [];
 		var selected = container.select(mouse);
+		
+		if(!selecting){
+			if(selected.length>1)
+				loop = selected[0].getLoop(2)
+					.concat(selected[1].getLoop(0))
+					.concat(selected[0].getLoop(3))
+					.concat(selected[1].getLoop(3));//*/
 
-		if(selected.length>1)
-			loop = selected[0].getLoop(2)
-				.concat(selected[1].getLoop(0))
-				.concat(selected[0].getLoop(3))
-				.concat(selected[1].getLoop(3));//*/
+		}else if(directionRing.direction !== null){
+			var d = directionRing.direction/(Math.PI/2);
+			loop = directionRing.target.getLoop(d);
+		}
 
 		for(var i = 0, l = loop.length; i<l; i++){
 			loop[i].selected = true;
 		}
-
-		// container.select(mouse);
 		
 	}).on('submit change', '#generator', function(e){
 		e.preventDefault();
 		delete container.components;
 		var n = Math.max(2, parseInt($('#dimensions').val()));
-		container.components = buildCube(n, Math.sqrt(32*32*2)-20, 32, 7);
+		container.components = buildCube(n, Math.sqrt(32*32*2)-20, 32, 5);
 		//Math.sqrt(32*32*2)*n/(2*Math.PI) - Math.sqrt(32*32*2)*0.5
 		controls.radius = Math.floor(n/2*(Math.sqrt(1800)+31+10));
 		
