@@ -46,73 +46,17 @@ function shift(loop, n){
 
 	if(!loop || !loop.length) return loop;
 
-	var tile = null;
-	var nextTile = null;
-	var rotations = [];
-
-	var indexes = [];
-	var parents = [];
-	var properties = [];
-	var references = [];
-
-	for (var i = 0, l = loop.length, offset = 0; i < l + offset; i++) {
-		tile = loop[i];
-		nextTile = loop[(i+n)%l];
-
-		var d = 0;
-		while(nextTile.get(d).getFace()!==loop[(i+n+1)%l]){
-			d++;
-		}
-
-		var neighbors = [];
-		neighbors.push({
-			d:d+1,
-			t:nextTile.get(d+1),
-			a:nextTile.get(d+1).get(d+3)
-		});
-
-		neighbors.push({
-			d:d+3,
-			t:nextTile.get(d+3),
-			a:nextTile.get(d+3).get(d+1)
-		});
-
-		indexes.push(nextTile.parent.components.indexOf(nextTile));
-		parents.push(nextTile.parent);
-		properties.push({
-			x:nextTile.x, y:nextTile.y, rotation: nextTile.rotation
-		});
-
-		references.push(neighbors);
-	};
-
-
-	// commit all changes
-	for(i = 0; i<l; i++){
-		tile = loop[i].getFace();
-		tile.x = properties[i].x;
-		tile.y = properties[i].y;
-		tile.rotation = properties[i].rotation;
-		tile.parent = parents[i];
-		parents[i].components[indexes[i]] = tile;
-
-		for(var j = 0, ref = references[j]; j< ref.length; ref = references[++j]){
-			for(var k in ref){
-				var r = ref[k];
-				if(tile.parent === r.parent){
-					tile.get(r.d).target = r.t;
-					r.a.target = tile;
-				}
-			}
-			//ref.get((j+2)).target = tile;
-		}
-
-
+	var colors = [];
+	for(var i = 0, l = loop.length; i<l; i++){
+		var tile = loop[i];
+		colors.push([tile.color, tile.selectedColor]);
 	}
 
-	
-
-	// -- 
+	for(i=0; i<l; i++){
+		var nextTile = loop[(i+n)%l];
+		nextTile.color = colors[i][0];
+		nextTile.selectedColor = colors[i][1];
+	}
 
 };
 
