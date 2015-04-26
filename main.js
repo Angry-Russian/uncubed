@@ -48,19 +48,72 @@ function shift(loop, n){
 
 	var tile = null;
 	var nextTile = null;
+	var rotations = [];
 
-	for(var i = 0, l = loop.length; i<l; i++){
+	var indexes = [];
+	var parents = [];
+	var properties = [];
+	var references = [];
+
+	for (var i = 0, l = loop.length, offset = 0; i < l + offset; i++) {
 		tile = loop[i];
-		nextTile = loop[(i+1)%l];
+		nextTile = loop[(i+n)%l];
 
-		//nextTile.parent.components[tile.parent.indexOf(tile)] = tile;
+		var d = 0;
+		while(nextTile.get(d).getFace()!==loop[(i+n+1)%l]){
+			d++;
+		}
 
-		// check each direction
-		// if same parent and same loop, disregard
-		// else if same parent and not in loop, disconnect and reconnect
+		var neighbors = [];
+		neighbors.push({
+			d:d+1,
+			t:nextTile.get(d+1),
+			a:nextTile.get(d+1).get(d+3)
+		});
+
+		neighbors.push({
+			d:d+3,
+			t:nextTile.get(d+3),
+			a:nextTile.get(d+3).get(d+1)
+		});
+
+		indexes.push(nextTile.parent.components.indexOf(nextTile));
+		parents.push(nextTile.parent);
+		properties.push({
+			x:nextTile.x, y:nextTile.y, rotation: nextTile.rotation
+		});
+
+		references.push(neighbors);
+	};
+
+
+	// commit all changes
+	for(i = 0; i<l; i++){
+		tile = loop[i].getFace();
+		tile.x = properties[i].x;
+		tile.y = properties[i].y;
+		tile.rotation = properties[i].rotation;
+		tile.parent = parents[i];
+		parents[i].components[indexes[i]] = tile;
+
+		for(var j = 0, ref = references[j]; j< ref.length; ref = references[++j]){
+			for(var k in ref){
+				var r = ref[k];
+				if(tile.parent === r.parent){
+					tile.get(r.d).target = r.t;
+					r.a.target = tile;
+				}
+			}
+			//ref.get((j+2)).target = tile;
+		}
+
+
 	}
-	// if perpendicular and not same parent, rotate. holy shit x_x.
-	// (just shift positions and rotations)
+
+	
+
+	// -- 
+
 };
 
 var Animator = function(){
@@ -268,7 +321,6 @@ var Adapter = function(){
 		if(!obj) throw "object cannot be undefined";
 		this.target = obj;
 		this.directionOffset = offset;
-		this.face = obj;
 	}
 	
 	Adapter.prototype.draw = function Draw(c){
@@ -308,7 +360,7 @@ var Adapter = function(){
 	}
 	
 	Adapter.prototype.getDirectionOffset = function GetDirectionOffset(i){
-		return (i+this.directionOffset)%this.face.refs.length;
+		return (i+this.directionOffset)%this.target.refs.length;
 	}
 	
 	Adapter.prototype.set = function Set(i, face){
@@ -581,10 +633,11 @@ function buildCube(d, r, ro, n, w){
 
 $(function($){
 	var dimentions = Math.max(2, parseInt($('#dimensions').val())),
+		tiles = 5,
 		mouse = {x: 0, y: 0},
 		centerX = $('body').width()/2,
 		centerY = $('body').height()/2,
-		faces = buildCube(dimentions, Math.sqrt(32*32*2)-20, 32, 5);
+		faces = buildCube(dimentions, Math.sqrt(32*32*2)-20, 32, tiles);
 		//Math.sqrt(32*32*2)*dimentions/(2*Math.PI) - Math.sqrt(32*32*2)*0.5
 
 	var container = new Face({
@@ -706,7 +759,7 @@ $(function($){
 			var loop = directionRing.target.getLoop(d);
 			directionRing.target = null;
 
-			shift(loop);
+			shift(loop, tiles);
 		}
 		
 	}).on('mouseout', 'canvas', function(e){
