@@ -41,23 +41,40 @@ function rotateCCW(array){
 	return flip(transpose(array), true);
 }
 
-
 function shift(loop, n){
 
 	if(!loop || !loop.length) return loop;
 
+	var tile;
+	var nextTile;
 	var colors = [];
+	var rotations = [];
 	for(var i = 0, l = loop.length; i<l; i++){
-		var tile = loop[i];
+		tile = loop[i];
+		nextTile = loop[(i+n)%l];
 		colors.push([tile.color, tile.selectedColor]);
+
+		for(var d = 0; d<4; d++){
+			var neighbor = tile.get(d);
+			var nf = neighbor.getFace();
+
+			if(nf.parent !== tile.parent && loop.indexOf(nf) < 0){
+				if(rotations.indexOf(nf.parent) < 0) rotations.push(nf.parent);
+
+			}
+
+		}
+	}
+
+	for(i=0; i<rotations.length; i++){
+		rotations[i].rotate(Math.PI/2);
 	}
 
 	for(i=0; i<l; i++){
-		var nextTile = loop[(i+n)%l];
+		nextTile = loop[(i+n)%l];
 		nextTile.color = colors[i][0];
 		nextTile.selectedColor = colors[i][1];
 	}
-
 };
 
 var Animator = function(){
@@ -151,7 +168,7 @@ var Face = function(){
 		c.save();
 		c.translate(this.x, this.y);
 		c.rotate(this.rotation);
-		//c.translate(-this.width/2, -this.height/2);
+		c.translate(-this.width/2, -this.height/2);
 		c.scale(this.scale, this.scale);
 		
 		c.fillStyle = this.selected ? this.selectedColor : this.color;
@@ -234,8 +251,8 @@ var Face = function(){
 		var rad = Math.atan2(modifiedCoords.y, modifiedCoords.x) - this.rotation;
 		var d = Math.sqrt(Math.pow(modifiedCoords.x, 2) + Math.pow(modifiedCoords.y, 2)) / this.scale;
 		
-		modifiedCoords.x = Math.cos(rad) * d;
-		modifiedCoords.y = Math.sin(rad) * d;
+		modifiedCoords.x = Math.cos(rad) * d + this.width/2;
+		modifiedCoords.y = Math.sin(rad) * d + this.height/2;
 		
 		this.selected = (
 			Math.abs(modifiedCoords.x - this.width/2) < this.width/2+0.5
@@ -256,6 +273,12 @@ var Face = function(){
 		return sel;
 	}
 	
+	Face.prototype.rotate = function(r){
+
+		this.rotation += r;
+		return this;
+	}
+
 	return Face;
 }();
 
@@ -315,6 +338,10 @@ var Adapter = function(){
 		return this.target.setColor(c);
 	}
 	
+	Adapter.prototype.rotate = function(r){
+		return this.target.rotate(r);
+	}
+
 	return Adapter;
 }();
 
@@ -471,8 +498,8 @@ function buildCube(d, r, ro, n, w){
 		// add n^2 tiles to each face
 		var s = (w) / n;
 		for(k = 0; k<nn; k++){
-			var x = 0.5 + (k % n)*s;
-			var y = 0.5 + Math.floor(k / n)*s;
+			var x = (0.5 + (k % n))*s;
+			var y = (0.5 + Math.floor(k / n))*s;
 			face = new Face({color: faces[i].color, selectedColor:faces[i].selectedColor, x:x, y:y, width: faces[i].width/n-1, height: faces[i].height/n-1, sides:4});
 			faces[i].components.push(face);
 		}
@@ -581,7 +608,7 @@ $(function($){
 		mouse = {x: 0, y: 0},
 		centerX = $('body').width()/2,
 		centerY = $('body').height()/2,
-		faces = buildCube(dimentions, Math.sqrt(32*32*2)-20, 32, tiles);
+		faces = buildCube(dimentions, Math.sqrt(32*32) - 20, 20, tiles);
 		//Math.sqrt(32*32*2)*dimentions/(2*Math.PI) - Math.sqrt(32*32*2)*0.5
 
 	var container = new Face({
@@ -674,6 +701,7 @@ $(function($){
 			}else this.direction = null;
 		}
 	};
+
 	$('body').on('mousedown', 'canvas', function(e){
 		e.preventDefault();
 		controls.activate();
