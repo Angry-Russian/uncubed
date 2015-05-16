@@ -60,14 +60,31 @@ function shift(loop, n){
 
 			if(nf.parent !== tile.parent && loop.indexOf(nf) < 0){
 				if(rotations.indexOf(nf.parent) < 0) rotations.push(nf.parent);
-
 			}
 
 		}
 	}
 
 	for(i=0; i<rotations.length; i++){
-		rotations[i].rotate(Math.PI/2);
+		// animate rotation
+		//rotations[i].rotate(Math.PI/2);
+		
+		rotations.forEach(function(face){
+			var clr = [];
+			var sclr = [];
+			var co = ((false)?rotateCW:rotateCCW)(face.components);
+			
+			for(var cl in co){
+				clr.push(co[cl].color);
+				sclr.push(co[cl].selectedColor);
+			}
+
+			face.components.forEach(function(tile, itile){
+				tile.color = clr[itile] || '#000';
+				tile.selectedColor = sclr[itile] || '#000';
+			});
+
+		});
 	}
 
 	for(i=0; i<l; i++){
