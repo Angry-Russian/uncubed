@@ -7,9 +7,31 @@ html, body, #main{
     position: absolute; top: 0; left: 50%; padding: 0.5em 1em; width: 350px; margin-left: -175px;
     border: none; background: rgba(250, 250, 250, 0.85); box-shadow: rgba(0, 0, 0, 0.65) 0 8px 15px -4px; border-radius: 0 0 8px 8px;
     text-align: center; z-index: 10;
+    color: #444;
+    text-transform: capitalize;
+    text-shadow: rgba(0, 0, 0 , 0.16) 0 1px 2px;
 }
 #generator input {
     background: rgba(255, 255, 255, 0.3);
+    border: 1px solid silver; padding: 8px;
+}
+
+#generator button{
+    border: 1px solid #fff;
+    background: #eee;
+    background: linear-gradient(180deg, #eee, #eee 50%, #e0e0e0 50%, #dcdcdc);
+    box-shadow: inset #ddd 0 0 16px, #ddd 0 1px 2px;
+    padding: 8px;
+    cursor: pointer;
+    color: #444;
+    text-transform: capitalize;
+    text-shadow: rgba(0, 0, 0 , 0.16) 0 1px 2px;
+}
+
+#generator button:hover{
+    background: #ffcc77;
+    background: linear-gradient(180deg, #ffcc77, #ffcc77 50%, #ffc060 50%, #ffbb55);
+    box-shadow: inset #ffeeaa 0 0 16px, #ddd 0 1px 2px;
 }
 
 #title{
