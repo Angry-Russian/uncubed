@@ -200,8 +200,29 @@ var Face = function(){
 		c.translate(-this.width/2, -this.height/2);
 		c.scale(this.scale, this.scale);
 		
+		var homogenous = !!this.components.length;
+		if(homogenous){
+			var color = this.components[0].color;
+			this.components.forEach(function(f, i){
+				homogenous = homogenous && f.color == color;
+			});
+		}
+		
+		if(homogenous){
+			c.shadowColor = color;
+			c.shadowBlur = 18 / this.scale;
+			c.shadowOffsetX = 0;
+			c.shadowOffsetY = 0;
+		}
+		
+		c.fillStyle = homogenous ? color : 'white';
+		c.fillRect(0, 0, this.width, this.height);
 		c.fillStyle = this.selected ? this.selectedColor : this.color;
 		c.fillRect(0, 0, this.width, this.height);
+		
+		
+		c.shadowColor = null;
+		c.shadowBlur = 0;
 		
 		if(this.selectCoords){
 			c.save();
@@ -819,6 +840,7 @@ $(function($){
 	});
 	
 	
+	scramble(faces, 0x1FF, tiles);
 	var anim = new Animator(document.getElementById('main'), [controls]);
 	anim.bindInteractions();
 	anim.start();
