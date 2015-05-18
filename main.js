@@ -54,22 +54,26 @@ function shift(loop, n){
 		nextTile = loop[(i+n)%l];
 		colors.push([tile.color, tile.selectedColor]);
 
-		for(var d = 0; d<4; d++){
-			var neighbor = tile.get(d);
-			var nf = neighbor.getFace();
-
-			if(nf.parent !== tile.parent && loop.indexOf(nf) < 0){
-				if(rotations.indexOf(nf.parent) < 0) rotations.push(nf.parent);
+		for(var d = 0; d<4; d++){ // check each direction
+			var neighbor = tile.get(d).getFace();
+			if(neighbor == loop[(i+1)%l]) break; // stop at whichever face is next in the loop
+		}
+		
+		for(var di = -1; di<2; di+=2){// check left and right, relative to direction, for connections to faces
+			var nf = tile.get(d+di).getFace();
+			if(rotations.indexOf(nf.parent) < 0 && nf.parent !== tile.parent){
+				rotations.push(nf.parent);
+				nf.parent.__di = di;
 			}
-
 		}
 	}
 
 	rotations.forEach(function(face){
 		var color = [];
 		var selectedColor = [];
-		var co = ((false)?rotateCW:rotateCCW)(face.components);
-
+		var co = ((face.__di<0)?rotateCCW:rotateCW)(face.components);
+		delete face.__di;
+		
 		for(var cl in co){
 			color.push(co[cl].color);
 			selectedColor.push(co[cl].selectedColor);
