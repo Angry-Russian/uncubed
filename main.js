@@ -93,6 +93,19 @@ function shift(loop, n){
 	}
 };
 
+function scramble(faces, depth, n){
+	depth = depth || 1; //Math.floor(Math.random()*0xFF)+0x20;
+	var nsides = faces.length;
+	for(var i = 0; i<depth; i++){
+		// pick a random face in a random side
+		// shift it into a random direction
+		var side = faces[Math.floor(nsides*Math.random())];
+		var face = side.components[Math.floor(side.components.length*Math.random())];
+		shift(face.getLoop(Math.floor(Math.random()*2)), n);
+		
+	}
+}
+
 var Animator = function(){
 	
 	function Animator(cnv, drawables){
@@ -624,9 +637,9 @@ function buildCube(d, r, ro, n, w){
 
 				f.parent = face;
 			}
-			face.color = face.selectedColor;
-			//face.color = 'rgba(0, 0, 0, 0.15)';
-			//face.selectedColor = 'rgba(0, 0, 0, 0.15)';
+			//face.color = face.selectedColor;
+			face.color = 'rgba(0, 0, 0, 0.15)';
+			face.selectedColor = 'rgba(0, 0, 0, 0.15)';
 		}
 		lastLayer = layer;
 	}
@@ -796,11 +809,15 @@ $(function($){
 		e.preventDefault();
 		delete container.components;
 		var n = Math.max(2, parseInt($('#dimensions').val()));
-		container.components = buildCube(n, Math.sqrt(32*32)-8, 4*n, tiles);
+		faces = container.components = buildCube(n, Math.sqrt(32*32)-8, 4*n, tiles);
 		//Math.sqrt(32*32*2)*n/(2*Math.PI) - Math.sqrt(32*32*2)*0.5
 		controls.radius = n * (Math.sqrt(32*32) - 4) + 8
 		
+	}).on('click', '#scramble', function(e){
+		e.preventDefault();
+		scramble(faces, 0x1FF, tiles);
 	});
+	
 	
 	var anim = new Animator(document.getElementById('main'), [controls]);
 	anim.bindInteractions();
